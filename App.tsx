@@ -4,7 +4,6 @@ import { generateMcqFromImage, generateMcqFromText } from './services/geminiServ
 import useLocalStorage from './hooks/useLocalStorage';
 
 import LoginPage from './pages/Login';
-import ApiKeySetupPage from './pages/ApiKeySetup';
 import Dashboard from './pages/Dashboard';
 import QuizResultPage from './pages/QuizResult';
 import QuizReview from './pages/QuizReview';
@@ -15,14 +14,13 @@ import Quiz from './components/Quiz';
 import Loader from './components/Loader';
 import Header from './components/Header';
 
-type View = 'LOGIN' | 'API_KEY_SETUP' | 'DASHBOARD' | 'UPLOAD' | 'PROCESSING' | 'GENERATING' | 'QUIZ' | 'RESULTS' | 'REVIEW' | 'ERROR';
+type View = 'LOGIN' | 'DASHBOARD' | 'UPLOAD' | 'PROCESSING' | 'GENERATING' | 'QUIZ' | 'RESULTS' | 'REVIEW' | 'ERROR';
 
 const App: React.FC = () => {
   const [view, setView] = useState<View>('LOGIN');
   const [error, setError] = useState<string | null>(null);
   
   const [user, setUser] = useLocalStorage<string | null>('mcq_genius_user', null);
-  const [apiKey, setApiKey] = useLocalStorage<string | null>('mcq_genius_apiKey', null);
   const [quizHistory, setQuizHistory] = useLocalStorage<QuizResult[]>('mcq_genius_history', []);
   const [theme, setTheme] = useLocalStorage<string>('mcq_genius_theme', 'dark');
   
@@ -37,12 +35,10 @@ const App: React.FC = () => {
   useEffect(() => {
     if (!user) {
       setView('LOGIN');
-    } else if (!apiKey) {
-      setView('API_KEY_SETUP');
     } else {
       setView('DASHBOARD');
     }
-  }, [user, apiKey]);
+  }, [user]);
 
   const handleLogin = (username: string) => {
     setUser(username);
@@ -54,10 +50,6 @@ const App: React.FC = () => {
     setActiveResult(null);
   };
 
-  const handleEditApiKey = () => {
-    setApiKey(null);
-  }
-
   const handleProcessingStart = () => {
     setProcessingProgress({ current: 0, total: 0 });
     setView('PROCESSING');
@@ -68,12 +60,6 @@ const App: React.FC = () => {
   };
 
   const handleFileProcessed = useCallback(async (processedData: { type: 'text'; data: string } | { type: 'images'; data: string[]; mimeType: string }) => {
-    if (!apiKey) {
-      setError("API Key is not set. Please set it in the settings.");
-      setView('ERROR');
-      return;
-    }
-
     setView('GENERATING');
     setError(null);
     try {
@@ -91,7 +77,7 @@ const App: React.FC = () => {
         let combinedQuestions: Question[] = [];
         for (let i = 0; i < chunks.length; i++) {
             const chunk = chunks[i];
-            const questionsFromChunk = await generateMcqFromImage(chunk, processedData.mimeType, apiKey);
+            const questionsFromChunk = await generateMcqFromImage(chunk, processedData.mimeType);
             if (questionsFromChunk) {
                 combinedQuestions = [...combinedQuestions, ...questionsFromChunk];
             }
@@ -101,7 +87,7 @@ const App: React.FC = () => {
 
       } else if (processedData.type === 'text') {
         setProcessingProgress({ current: 0, total: 0 }); 
-        questions = await generateMcqFromText(processedData.data, apiKey);
+        questions = await generateMcqFromText(processedData.data);
       } else {
         throw new Error("Invalid file data received.");
       }
@@ -118,7 +104,7 @@ const App: React.FC = () => {
       setError(errorMessage);
       setView('ERROR');
     }
-  }, [apiKey]);
+  }, []);
 
   const handleQuizFinish = (score: number, userAnswers: UserAnswers) => {
     if (!activeQuiz) return;
@@ -151,8 +137,6 @@ const App: React.FC = () => {
     switch (view) {
       case 'LOGIN':
         return <LoginPage onLogin={handleLogin} />;
-      case 'API_KEY_SETUP':
-        return <ApiKeySetupPage onApiKeySet={setApiKey} />;
       case 'DASHBOARD':
         return <Dashboard user={user!} onStartNewQuiz={handleStartNewQuiz} quizHistory={quizHistory} onReview={handleReviewQuiz} />;
       case 'UPLOAD':
@@ -182,7 +166,7 @@ const App: React.FC = () => {
             <h2 className="text-2xl font-bold text-red-500 mb-4">Oops! Something went wrong.</h2>
             <p className="text-[var(--text-secondary)] mb-6">{error}</p>
             <button
-              onClick={() => user && apiKey ? setView('UPLOAD') : setView('API_KEY_SETUP')}
+              onClick={() => setView('UPLOAD')}
               className="bg-[var(--accent-primary)] hover:opacity-90 text-white font-bold py-2 px-4 rounded-lg transition-opacity"
             >
               Try Again
@@ -197,8 +181,8 @@ const App: React.FC = () => {
   return (
      <div className="min-h-screen bg-[var(--bg-primary)] text-[var(--text-primary)] flex flex-col items-center justify-center p-4 font-sans transition-colors duration-300">
       <div className="w-full max-w-4xl mx-auto">
-        {user && apiKey && <Header user={user} onLogout={handleLogout} theme={theme} setTheme={setTheme} onNavigateToDashboard={() => setView('DASHBOARD')} onEditApiKey={handleEditApiKey} />}
-        <main className={user && apiKey ? 'mt-8' : ''}>
+        {user && <Header user={user} onLogout={handleLogout} theme={theme} setTheme={setTheme} onNavigateToDashboard={() => setView('DASHBOARD')} />}
+        <main className={user ? 'mt-8' : ''}>
           {renderContent()}
         </main>
       </div>
